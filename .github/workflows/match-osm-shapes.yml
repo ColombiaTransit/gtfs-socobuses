@@ -29,11 +29,18 @@ jobs:
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: source/
-      - name: Download OSM and project stops onto route shapes
+      - name: Verify saved Overpass export
+        run: |
+          test -s data/osm_export.json || {
+            echo "::error::Save the existing Overpass JSON as data/osm_export.json in the repository before running."
+            exit 1
+          }
+      - name: Project saved OSM features onto route shapes
         run: |
           python scripts/match_osm_shapes.py \
             --details source/route_details.json \
             --references source/reference_points.json \
+            --osm data/osm_export.json \
             --max-distance-m "${{ inputs.max_distance_m }}"
       - uses: actions/upload-artifact@v4
         if: always()

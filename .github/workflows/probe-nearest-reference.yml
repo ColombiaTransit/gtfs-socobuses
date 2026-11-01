@@ -6,17 +6,13 @@ on:
         description: "Existing route details artifact run"
         required: true
         default: "41317058217"
-      max_requests:
-        description: "Number of sample coordinates (max 40)"
-        required: true
-        default: "18"
 permissions:
   contents: read
   actions: read
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,10 +25,10 @@ jobs:
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: source/
-      - name: Probe a small GPS sample
+      - name: Probe all known reference point candidates
         run: |
           test -s source/route_details.json
-          python scripts/probe_nearest_reference.py --source source/route_details.json --max-requests "${{ inputs.max_requests }}"
+          python scripts/probe_nearest_reference.py --source source/route_details.json --references source/reference_points.json
       - uses: actions/upload-artifact@v4
         with:
           name: socobuses-nearest-reference-probe

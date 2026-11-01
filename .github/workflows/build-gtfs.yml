@@ -57,13 +57,19 @@ jobs:
             --output output/experimental_gtfs \
             --start-date "${{ inputs.start_date }}" \
             --end-date "${{ inputs.end_date }}"
+      - name: Check experimental GTFS structure and exclusions
+        run: |
+          python scripts/validate_experimental_gtfs.py \
+            --root output \
+            --report output/validation/gtfs-consistency.json
       - name: Validate experimental GTFS with MobilityData validator
         continue-on-error: true
         run: |
           mkdir -p output/validation
           (cd output/experimental_gtfs && zip -q -r ../validation/experimental-gtfs.zip .)
           curl -fLsS --retry 3 -o /tmp/validator.jar https://github.com/MobilityData/gtfs-validator/releases/latest/download/gtfs-validator.jar
-          java -jar /tmp/validator.jar -i output/validation/experimental-gtfs.zip -o output/validation/report
+          java -jar /tmp/validator.jar -i output/validation/experimental-gtfs.zip -o output/validation/report 2>&1 | tee output/validation/validator.log
+          exit ${PIPESTATUS[0]}
       - name: Upload GTFS draft and research files
         uses: actions/upload-artifact@v4
         with:

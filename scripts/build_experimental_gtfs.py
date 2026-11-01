@@ -34,7 +34,10 @@ def as_interval(value):
         return None
 
 
-def build(source, output, start, end, first, last):
+SERVICE_WINDOWS = {"WEEKDAY": (270, 1350), "SATURDAY": (360, 1260), "SUNDAY_HOLIDAY": (360, 1260)}
+HOURS_SOURCE = "https://socobuses.com/tourist?language=EN"
+
+def build(source, output, start, end):
     details = json.loads(source.read_text(encoding="utf-8"))
     stops, trips, times, frequencies, routes, shapes, audit = [], [], [], [], [], [], []
     seen_lines = set()
@@ -73,12 +76,15 @@ def build(source, output, start, end, first, last):
         for i, (lat, lon) in enumerate(coords):
             shapes.append({"shape_id": f"shape_{rid}", "shape_pt_lat": lat,
                            "shape_pt_lon": lon, "shape_pt_sequence": i + 1})
-        checkpoints = [(i, int(p["timeDifference"])) for i, p in enumerate(refs)
-                       if as_interval(p.get("timeDifference")) is not None or p.get("timeDifference") == 0]
-        # Zero values in the source generally mean no timing checkpoint.
-        checkpoints = [(0, 0)] + [(i, value) for i, value in checkpoints
-                                   if value > 0 and i > 0]
-        checkpoints = sorted(set(checkpoints))
+        controls = [(i, int(p["timeDifference"])) for i, p in enumerate(refs)
+                    if str(p.get("type")) == "1" and as_interval(p.get("timeDifference")) is not None]
+        if not controls:
+            audit.append({"route_id": rid, "issue": "no positive type-1 timing controls"})
+            continue
+        if any(b[1] < a[1] for a, b in zip(controls, controls[1:])):
+            audit.append({"route_id": rid, "issue": "nonmonotonic source timing controls"})
+            continue
+        checkpoints = [(0, 0)] + [(i, value) for i, value in controls if i > 0]
         if checkpoints[-1][0] != len(refs) - 1:
             audit.append({"route_id": rid, "issue": f"last reference point has no timing checkpoint; last timed index={checkpoints[-1][0]+1}/{len(refs)}, last timed minute={checkpoints[-1][1]}; excluded pending source verification"})
             continue
@@ -102,17 +108,18 @@ def build(source, output, start, end, first, last):
             if interval is None:
                 audit.append({"route_id": rid, "issue": f"no valid interval: {field}"})
                 continue
+            window_start, window_end = SERVICE_WINDOWS[service_id]
             trip_id = f"{rid}_{service_id}_template"
             trips.append({"route_id": line_id, "service_id": service_id,
                           "trip_id": trip_id, "shape_id": f"shape_{rid}",
                           "direction_id": direction_id if direction_id is not None else "",
                           "trip_headsign": route.get("endControl") or ""})
             for i, offset in enumerate(offsets):
-                t = hhmm(first + offset)
+                t = hhmm(window_start + offset)
                 times.append({"trip_id": trip_id, "arrival_time": t, "departure_time": t,
                               "stop_id": f"{rid}_{i+1}", "stop_sequence": i + 1})
-            frequencies.append({"trip_id": trip_id, "start_time": hhmm(first),
-                                "end_time": hhmm(last), "headway_secs": interval * 60,
+            frequencies.append({"trip_id": trip_id, "start_time": hhmm(window_start),
+                                "end_time": hhmm(window_end), "headway_secs": interval * 60,
                                 "exact_times": 0})
     save(output / "agency.txt", ["agency_id", "agency_name", "agency_url", "agency_timezone"],
          [{"agency_id": "socobuses", "agency_name": "Socobuses",
@@ -125,11 +132,17 @@ def build(source, output, start, end, first, last):
     save(output / "frequencies.txt", ["trip_id", "start_time", "end_time", "headway_secs", "exact_times"], frequencies)
     generate_calendar(start, end, output)
     save(output.parent / "research" / "estimated_schedule_issues.csv", ["route_id", "issue"], audit)
+    (output.parent / "research" / "frequency_windows.json").write_text(
+        json.dumps({"source": HOURS_SOURCE, "windows": {
+            service: {"start": hhmm(a), "end": hhmm(b)}
+            for service, (a, b) in SERVICE_WINDOWS.items()},
+            "note": "Official general hours; route-specific departure windows are experimental."
+        }, indent=2), encoding="utf-8")
     (output.parent / "research" / "ESTIMATES_README.txt").write_text(
         "EXPERIMENTAL ONLY - DO NOT PUBLISH. All stop coordinates are estimated from route geometry "
         "by relative sequence position, not actual stop locations. Reference points may not be stops. "
         "Time differences are interpreted as cumulative minutes and interpolated between checkpoints. "
-        f"Operating window {hhmm(first)} to {hhmm(last)} is an experimental departure assumption, not a route-specific published timetable. Socobuses publishes general hours at https://socobuses.com/tourist?language=EN. "
+        "Daytype windows follow official general hours at https://socobuses.com/tourist?language=EN; applying them to individual departures remains experimental. "
         "Intervals are interpreted as minutes but are not verified. Calendar holiday operation is assumed. "
         "Routes with missing geometry or invalid timing checkpoints are excluded.\n",
         encoding="utf-8")
@@ -144,14 +157,9 @@ def main():
     p.add_argument("--output", type=Path, default=Path("output/experimental_gtfs"))
     p.add_argument("--start-date", required=True)
     p.add_argument("--end-date", required=True)
-    p.add_argument("--assumed-first-departure", type=int, default=360)
-    p.add_argument("--assumed-last-departure", type=int, default=1200)
     args = p.parse_args()
-    if not (0 <= args.assumed_first_departure < args.assumed_last_departure <= 1440):
-        p.error("Invalid assumed operating window")
     build(args.source, args.output, date.fromisoformat(args.start_date),
-          date.fromisoformat(args.end_date), args.assumed_first_departure,
-          args.assumed_last_departure)
+          date.fromisoformat(args.end_date))
 
 
 if __name__ == "__main__":

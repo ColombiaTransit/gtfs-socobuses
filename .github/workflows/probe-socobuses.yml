@@ -3,6 +3,14 @@ name: Probe Socobuses API (manual)
 on:
   workflow_dispatch:
     inputs:
+      download_all:
+        description: "Attempt all origins and valid destinations (limited to 500 requests per run)"
+        type: boolean
+        default: true
+      max_requests:
+        description: "Maximum API requests per run (1-1000)"
+        default: "500"
+        required: true
       origin_offset:
         description: "Start index of origin batch"
         default: "0"
@@ -26,7 +34,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,8 +49,13 @@ jobs:
           restore-keys: |
             socobuses-probe-
       - name: Probe Socobuses
+        env:
+          DOWNLOAD_ALL: ${{ inputs.download_all }}
         run: |
-          python scripts/probe_socobuses.py \
+          FLAGS=""
+          if [ "$DOWNLOAD_ALL" = "true" ]; then FLAGS="--all"; fi
+          python scripts/probe_socobuses.py $FLAGS \
+            --max-requests "${{ inputs.max_requests }}" \
             --origin-offset "${{ inputs.origin_offset }}" \
             --max-origins "${{ inputs.max_origins }}" \
             --max-destinations "${{ inputs.max_destinations }}" \

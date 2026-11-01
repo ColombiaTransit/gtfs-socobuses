@@ -74,7 +74,7 @@ def build(source, output, start, end, first, last):
                                    if value > 0 and i > 0]
         checkpoints = sorted(set(checkpoints))
         if checkpoints[-1][0] != len(refs) - 1:
-            audit.append({"route_id": rid, "issue": "last reference point has no timing checkpoint"})
+            audit.append({"route_id": rid, "issue": f"last reference point has no timing checkpoint; last timed index={checkpoints[-1][0]+1}/{len(refs)}, last timed minute={checkpoints[-1][1]}; excluded pending source verification"})
             continue
         if any(b[1] < a[1] for a, b in zip(checkpoints, checkpoints[1:])):
             audit.append({"route_id": rid, "issue": "nonmonotonic timing checkpoints"})

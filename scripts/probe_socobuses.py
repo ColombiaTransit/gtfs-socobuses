@@ -1,129 +1,155 @@
 #!/usr/bin/env python3
-"""Manual, bounded research probe of the public Socobuses API."""
+"""Bounded Socobuses route discovery with resumable cached API responses."""
 import argparse
 import json
 import logging
-import pathlib
+from pathlib import Path
 import time
-
 import requests
 from bs4 import BeautifulSoup
 
 BASE = "https://socobuses.co"
-OUTPUT = pathlib.Path("output")
+OUT = Path("output")
+CACHE = Path("cache")
 LOG = logging.getLogger("socobuses")
 
 
-def write_json(filename, payload):
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    (OUTPUT / filename).write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+def read(path, default):
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
 
 
-def sampled(values, count):
-    if not values:
-        return []
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(path)
+
+
+def sample(seq, count):
+    if len(seq) <= count:
+        return seq
     if count == 1:
-        return values[:1]
-    return list(dict.fromkeys(
-        values[round(i * (len(values) - 1) / (min(count, len(values)) - 1))]
-        for i in range(min(count, len(values)))
-    ))
+        return seq[:1]
+    return [seq[round(i * (len(seq) - 1) / (count - 1))] for i in range(count)]
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--max-origins", type=int, default=3)
-    parser.add_argument("--max-destinations", type=int, default=8)
-    parser.add_argument("--max-routes", type=int, default=15)
-    parser.add_argument("--delay", type=float, default=1.5)
-    args = parser.parse_args()
-    if not (1 <= args.max_origins <= 10
-            and 1 <= args.max_destinations <= 20
-            and 1 <= args.max_routes <= 50 and args.delay >= 1):
-        parser.error("Limits: origins 1-10, destinations 1-20, routes 1-50, delay >= 1")
-
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "ColombiaTransit-Socobuses-Research/0.1 (manual limited probe)",
-        "Accept": "application/json, text/plain, */*",
-    })
-    page = session.get(BASE + "/routes", timeout=30)
+    p = argparse.ArgumentParser()
+    p.add_argument("--origin-offset", type=int, default=0)
+    p.add_argument("--max-origins", type=int, default=12)
+    p.add_argument("--max-destinations", type=int, default=12)
+    p.add_argument("--max-routes", type=int, default=50)
+    p.add_argument("--delay", type=float, default=1.5)
+    a = p.parse_args()
+    if not (0 <= a.origin_offset <= 500 and 1 <= a.max_origins <= 20
+            and 1 <= a.max_destinations <= 20 and 1 <= a.max_routes <= 100
+            and a.delay >= 1):
+        p.error("Limits: offset 0-500, origins 1-20, destinations 1-20, routes 1-100, delay >= 1")
+    s = requests.Session()
+    s.headers.update({"User-Agent": "ColombiaTransit-Socobuses-Research/0.2 (manual, limited)",
+                      "Accept": "application/json, text/plain, */*"})
+    page = s.get(BASE + "/routes", timeout=30)
     page.raise_for_status()
     csrf = BeautifulSoup(page.text, "html.parser").select_one('meta[name="csrf-token"]')
     if not csrf or not csrf.get("content"):
-        raise RuntimeError("Missing CSRF token on /routes")
-    session.headers.update({
-        "X-CSRF-TOKEN": csrf["content"],
-        "Referer": BASE + "/routes",
-    })
+        raise RuntimeError("No CSRF meta tag found")
+    s.headers.update({"X-CSRF-TOKEN": csrf["content"], "Referer": BASE + "/routes"})
 
     def get(path):
-        response = session.get(BASE + path, timeout=30)
-        response.raise_for_status()
-        return response.json()
+        r = s.get(BASE + path, timeout=30)
+        r.raise_for_status()
+        return r.json()
 
-    def post(path, payload):
-        time.sleep(args.delay)
-        response = session.post(BASE + path, json=payload, timeout=30)
-        response.raise_for_status()
-        return response.json()
+    def post(path, data):
+        time.sleep(a.delay)
+        r = s.post(BASE + path, json=data, timeout=30)
+        r.raise_for_status()
+        return r.json()
 
-    references = get("/site/routes/getPointsReference")
-    write_json("reference_points.json", references)
-    if not references.get("status"):
-        raise RuntimeError("Reference point query returned status=false")
-    ids = [p["referencePointId"] for p in references.get("getPointReference", [])
-           if isinstance(p, dict) and "referencePointId" in p]
-    origins = sampled(ids, args.max_origins)
-    destinations = sampled(ids, args.max_destinations)
-    errors, filtered, found, details = [], [], {}, {}
-
+    refs = get("/site/routes/getPointsReference")
+    write(OUT / "reference_points.json", refs)
+    if not refs.get("status"):
+        raise RuntimeError("Reference endpoint returned status=false")
+    ids = [x["referencePointId"] for x in refs.get("getPointReference", [])
+           if isinstance(x, dict) and "referencePointId" in x]
+    origins = ids[a.origin_offset:a.origin_offset + a.max_origins]
+    index = read(CACHE / "route_index.json", {})
+    details = read(CACHE / "route_details.json", {})
+    filters = read(CACHE / "filtered_routes.json", {})
+    destinations_cache = read(CACHE / "destinations.json", {})
+    errors = []
+    new_filters = 0
     for origin in origins:
-        try:
-            response = post("/site/routes/getPointsReferenceDestination",
-                            {"referencePointIdOrigin": origin})
-            write_json(f"destinations_{origin}.json", response)
-            allowed = {p["referencePointId"] for p in response.get("getPointReference", [])
-                       if isinstance(p, dict) and "referencePointId" in p}
-        except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
-            errors.append({"stage": "destinations", "origin": origin, "error": str(exc)})
+        key = str(origin)
+        if key not in destinations_cache:
+            try:
+                destinations_cache[key] = post("/site/routes/getPointsReferenceDestination",
+                                               {"referencePointIdOrigin": origin})
+                write(CACHE / "destinations.json", destinations_cache)
+            except (requests.RequestException, ValueError, TypeError) as exc:
+                errors.append({"stage": "destinations", "origin": origin, "error": str(exc)})
+                continue
+        response = destinations_cache[key]
+        if not isinstance(response, dict):
+            errors.append({"stage": "destinations", "origin": origin, "error": "Unexpected response"})
             continue
-        for destination in destinations:
-            if origin == destination or destination not in allowed:
+        allowed = [x["referencePointId"] for x in response.get("getPointReference", [])
+                   if isinstance(x, dict) and "referencePointId" in x
+                   and x["referencePointId"] != origin]
+        for dest in sample(allowed, a.max_destinations):
+            pair = f"{origin}:{dest}"
+            if pair in filters:
                 continue
             try:
-                response = post("/site/routes/getFilteredRoutes", {
+                result = post("/site/routes/getFilteredRoutes", {
                     "idReferencePointOrigin": origin,
-                    "idReferencePointDestination": destination,
+                    "idReferencePointDestination": dest,
                     "wheelchair": False,
                 })
-                filtered.append({"origin": origin, "destination": destination,
-                                 "response": response})
-                for route in response.get("getRouteWithFilter", []):
-                    if isinstance(route, dict) and route.get("routeId") is not None:
-                        found[str(route["routeId"])] = route
-            except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
-                errors.append({"stage": "filtered", "origin": origin,
-                               "destination": destination, "error": str(exc)})
-
-    write_json("filtered_routes.json", filtered)
-    write_json("route_index.json", found)
-    for route_id in list(found)[:args.max_routes]:
+                filters[pair] = result
+                new_filters += 1
+                for item in result.get("getRouteWithFilter", []):
+                    if isinstance(item, dict) and item.get("routeId") is not None:
+                        index[str(item["routeId"])] = item
+                write(CACHE / "filtered_routes.json", filters)
+                write(CACHE / "route_index.json", index)
+            except (requests.RequestException, ValueError, TypeError) as exc:
+                errors.append({"stage": "filtered", "origin": origin, "destination": dest,
+                               "error": str(exc)})
+    for route_id in list(index):
+        if len(details) >= a.max_routes:
+            break
+        if route_id in details:
+            continue
         try:
-            details[route_id] = post("/site/routes/getRouteById",
-                                     {"routeId": int(route_id)})
-        except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
-            errors.append({"stage": "details", "routeId": route_id, "error": str(exc)})
-    write_json("route_details.json", details)
+            result = post("/site/routes/getRouteById", {"routeId": int(route_id)})
+            if isinstance(result, dict) and result.get("status") and result.get("getRouteById"):
+                details[route_id] = result
+                write(CACHE / "route_details.json", details)
+            else:
+                errors.append({"stage": "detail", "routeId": route_id,
+                               "error": "Unexpected response"})
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            errors.append({"stage": "detail", "routeId": route_id, "error": str(exc)})
+
+    # Include all accumulated data in the downloadable artifact.
+    write(OUT / "destinations.json", destinations_cache)
+    write(OUT / "filtered_routes.json", filters)
+    write(OUT / "route_index.json", index)
+    write(OUT / "route_details.json", details)
     summary = {
-        "reference_points": len(ids), "sampled_origins": origins,
-        "sampled_destinations": destinations, "filter_responses": len(filtered),
-        "unique_routes": len(found), "route_details": len(details),
+        "reference_points": len(ids), "origin_offset": a.origin_offset,
+        "origins_this_run": origins, "new_filter_queries": new_filters,
+        "total_filter_queries_cached": len(filters),
+        "unique_routes": len(index), "route_details": len(details),
         "errors": errors,
     }
-    write_json("summary.json", summary)
+    write(OUT / "summary.json", summary)
     LOG.info("Probe summary: %s", json.dumps(summary, ensure_ascii=False))
 
 

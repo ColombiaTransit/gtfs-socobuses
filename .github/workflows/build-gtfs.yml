@@ -45,6 +45,13 @@ jobs:
             --output output/gtfs \
             --start-date "${{ inputs.start_date }}" \
             --end-date "${{ inputs.end_date }}"
+      - name: Build experimental complete GTFS (estimated data)
+        run: |
+          python scripts/build_experimental_gtfs.py \
+            --source source/route_details.json \
+            --output output/experimental_gtfs \
+            --start-date "${{ inputs.start_date }}" \
+            --end-date "${{ inputs.end_date }}"
       - name: Upload GTFS draft and research files
         uses: actions/upload-artifact@v4
         with:

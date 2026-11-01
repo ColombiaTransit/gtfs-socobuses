@@ -62,3 +62,11 @@ De Socobuses-routecode met suffix `i` staat voor **ida** (heenrichting, GTFS `di
 De bronroute-ID en volledige broncode blijven behouden in `research/route_directions.csv`, inclusief het kandidaat-`trip_headsign` (eindpunt) en de eigen `shape_id`. `routes.txt` bevat iedere gegroepeerde lijn eenmaal; de richtingsspecifieke geometrieën blijven afzonderlijk in `shapes.txt`.
 
 Bij het bouwen van `trips.txt` moeten alle richtingsritten dezelfde gegroepeerde `route_id` krijgen, met hun eigen `direction_id`, `shape_id`, `trip_headsign` en toepasselijke `service_id`. De bronfrequentie 0 op zondag/feestdagen betekent **geen ritten** voor die richting op `SUNDAY_HOLIDAY`. De algemene diensturen en frequenties vormen geen bewijs voor exacte vertrektijden; de conservatieve builder genereert daarom nog geen ritten.
+
+## Experimentele frequentieplanning (2026-11-01)
+
+`scripts/build_experimental_gtfs.py` gebruikt nu per dagtype de op de officiële Socobuses-pagina gepubliceerde **algemene** dienstvensters: WEEKDAY 04:30–22:30, SATURDAY 06:00–21:00 en SUNDAY_HOLIDAY 06:00–21:00. De bron-URL wordt meegeleverd in `research/frequency_windows.json`.
+
+Per bronrichting wordt de positieve API-frequentie in minuten omgezet naar `frequencies.txt.headway_secs` (minuten × 60), met `exact_times=0`. Bij frequentie 0 of een ongeldige waarde wordt voor die richting en dat dagtype geen template-trip of frequentie gemaakt. Het bijbehorende `trips.txt`-record gebruikt de gegroepeerde lijncode en de eigen `direction_id` en `shape_id`.
+
+**Publicatiebeperking:** dit is uitsluitend een experimentele planning. De algemene uren zijn niet bevestigd als exacte vertrekvensters per route. De bijbehorende `stop_times.txt` bevat geschatte tijden en geometrisch geschatte haltes; dit is geen officiële, publiceerbare dienstregeling. Routes met onvoldoende of tegenstrijdige tijdcontrolepunten worden uitgesloten. De GitHub Actions-workflow moet nog worden uitgevoerd om de aangepaste output te toetsen.

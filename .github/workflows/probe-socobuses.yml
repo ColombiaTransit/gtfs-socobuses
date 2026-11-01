@@ -3,17 +3,21 @@ name: Probe Socobuses API (manual)
 on:
   workflow_dispatch:
     inputs:
+      origin_offset:
+        description: "Start index of origin batch"
+        default: "0"
+        required: true
       max_origins:
-        description: "Sampled origins (1-10)"
-        default: "3"
+        description: "Sampled origins (1-20)"
+        default: "12"
         required: true
       max_destinations:
-        description: "Sampled destinations (1-20)"
-        default: "8"
+        description: "Destinations per origin (1-20)"
+        default: "12"
         required: true
       max_routes:
-        description: "Maximum route details (1-50)"
-        default: "15"
+        description: "Maximum cached route details (1-100)"
+        default: "50"
         required: true
 
 permissions:
@@ -32,6 +36,7 @@ jobs:
       - name: Probe Socobuses
         run: |
           python scripts/probe_socobuses.py \
+            --origin-offset "${{ inputs.origin_offset }}" \
             --max-origins "${{ inputs.max_origins }}" \
             --max-destinations "${{ inputs.max_destinations }}" \
             --max-routes "${{ inputs.max_routes }}"

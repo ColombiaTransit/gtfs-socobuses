@@ -1,0 +1,32 @@
+name: Audit Socobuses route timings
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Existing Socobuses API route details artifact run"
+        required: true
+        default: "41317058217"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: socobuses-api-probe
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: source/
+      - name: Analyze source intervals and control point times
+        run: python scripts/audit_route_timings.py --details source/route_details.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: socobuses-timing-audit
+          path: output/timing-audit/
+          if-no-files-found: error

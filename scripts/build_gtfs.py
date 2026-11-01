@@ -6,6 +6,7 @@ No stop coordinates, trips, stop_times or frequencies are invented.
 import argparse
 import csv
 import json
+import re
 from pathlib import Path
 
 from build_calendar import generate as generate_calendar
@@ -19,9 +20,21 @@ def csv_file(path, columns, rows):
         writer.writerows(rows)
 
 
+def route_identity(number):
+    """Return GTFS line ID and direction from Socobuses i/r suffix.
+
+    Preserve a variant prefix (e.g. 613v). Unrecognized codes remain separate.
+    """
+    match = re.fullmatch(r"(.+)([ir])", number, flags=re.IGNORECASE)
+    if not match:
+        return number, None
+    return match.group(1), 0 if match.group(2).lower() == "i" else 1
+
+
 def build(source, output, start, end):
     raw = json.loads(source.read_text(encoding="utf-8"))
-    routes, shapes, points, intervals, problems = [], [], [], [], []
+    routes, shapes, points, intervals, problems, directions = [], [], [], [], [], []
+    seen_lines = set()
     for key, response in sorted(raw.items(), key=lambda kv: int(kv[0])):
         route = response.get("getRouteById") or {}
         if not route:
@@ -41,10 +54,20 @@ def build(source, output, start, end):
             except (KeyError, TypeError, ValueError):
                 pass
         shape_id = f"shape_{rid}" if len(valid) >= 2 else ""
-        routes.append({
-            "route_id": rid, "agency_id": "socobuses", "route_short_name": number,
-            "route_long_name": f"{start_name} - {end_name}".strip(" -"),
-            "route_type": 3,
+        line_id, direction_id = route_identity(number)
+        if line_id not in seen_lines:
+            routes.append({
+                "route_id": line_id, "agency_id": "socobuses",
+                "route_short_name": line_id, "route_long_name": "",
+                "route_type": 3,
+            })
+            seen_lines.add(line_id)
+        directions.append({
+            "socobuses_route_id": rid, "socobuses_route_code": number,
+            "gtfs_route_id": line_id, "direction_id": direction_id if direction_id is not None else "",
+            "trip_headsign_candidate": end_name,
+            "shape_id": shape_id,
+            "note": "direction mapping only; no observed departures or stop times",
         })
         for seq, (lat, lon) in enumerate(valid, 1):
             shapes.append({"shape_id": shape_id, "shape_pt_lat": lat,
@@ -81,9 +104,12 @@ def build(source, output, start, end):
               "time_difference_raw", "type_raw"], points)
     csv_file(research / "route_service_intervals.csv",
              ["route_id", "service_id", "source_field", "raw_value"], intervals)
+    csv_file(research / "route_directions.csv",
+             ["socobuses_route_id", "socobuses_route_code", "gtfs_route_id",
+              "direction_id", "trip_headsign_candidate", "shape_id", "note"], directions)
     csv_file(research / "issues.csv", ["route_id", "issue"], problems)
     summary = {
-        "routes": len(routes), "routes_with_geometry": len({x["shape_id"] for x in shapes}),
+        "gtfs_lines": len(routes), "source_direction_routes": len(directions), "routes_with_geometry": len({x["shape_id"] for x in shapes}),
         "shape_points": len(shapes), "reference_point_occurrences": len(points),
         "issues": len(problems),
         "warning": "DRAFT ONLY: reference points are not verified stops; no stops, trips, stop_times or frequencies generated.",

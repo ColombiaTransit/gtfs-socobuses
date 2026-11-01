@@ -85,6 +85,20 @@ def build(source, output, start, end):
             audit.append({"route_id": rid, "issue": "nonmonotonic source timing controls"})
             continue
         checkpoints = [(0, 0)] + [(i, value) for i, value in controls if i > 0]
+        # A source may append an untimed waypoint AFTER its explicitly named
+        # destination. Trim only when the final positive type-1 checkpoint is
+        # that named destination; never infer a missing destination time.
+        if checkpoints[-1][0] != len(refs) - 1:
+            terminal_idx = checkpoints[-1][0]
+            terminal = refs[terminal_idx]
+            if (str(terminal.get("type")) == "1"
+                    and str(terminal.get("name") or "").strip().casefold()
+                    == str(route.get("endControl") or "").strip().casefold()
+                    and str(route.get("endControl") or "").strip()):
+                audit.append({"route_id": rid, "issue": (
+                    f"trimmed {len(refs)-terminal_idx-1} untimed references after "
+                    "named destination; no end-time extrapolation")})
+                refs = refs[:terminal_idx + 1]
         if checkpoints[-1][0] != len(refs) - 1:
             audit.append({"route_id": rid, "issue": f"last reference point has no timing checkpoint; last timed index={checkpoints[-1][0]+1}/{len(refs)}, last timed minute={checkpoints[-1][1]}; excluded pending source verification"})
             continue

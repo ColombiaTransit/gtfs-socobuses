@@ -3,6 +3,10 @@ name: Probe Socobuses API (manual)
 on:
   workflow_dispatch:
     inputs:
+      details_only:
+        description: "Download details for already discovered routes only"
+        type: boolean
+        default: true
       download_all:
         description: "Attempt all origins and valid destinations (limited to 500 requests per run)"
         type: boolean
@@ -51,9 +55,11 @@ jobs:
       - name: Probe Socobuses
         env:
           DOWNLOAD_ALL: ${{ inputs.download_all }}
+          DETAILS_ONLY: ${{ inputs.details_only }}
         run: |
           FLAGS=""
           if [ "$DOWNLOAD_ALL" = "true" ]; then FLAGS="--all"; fi
+          if [ "$DETAILS_ONLY" = "true" ]; then FLAGS="--details-only"; fi
           python scripts/probe_socobuses.py $FLAGS \
             --max-requests "${{ inputs.max_requests }}" \
             --origin-offset "${{ inputs.origin_offset }}" \

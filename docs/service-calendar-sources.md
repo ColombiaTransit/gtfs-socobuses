@@ -70,3 +70,13 @@ Bij het bouwen van `trips.txt` moeten alle richtingsritten dezelfde gegroepeerde
 Per bronrichting wordt de positieve API-frequentie in minuten omgezet naar `frequencies.txt.headway_secs` (minuten × 60), met `exact_times=0`. Bij frequentie 0 of een ongeldige waarde wordt voor die richting en dat dagtype geen template-trip of frequentie gemaakt. Het bijbehorende `trips.txt`-record gebruikt de gegroepeerde lijncode en de eigen `direction_id` en `shape_id`.
 
 **Publicatiebeperking:** dit is uitsluitend een experimentele planning. De algemene uren zijn niet bevestigd als exacte vertrekvensters per route. De bijbehorende `stop_times.txt` bevat geschatte tijden en geometrisch geschatte haltes; dit is geen officiële, publiceerbare dienstregeling. Routes met onvoldoende of tegenstrijdige tijdcontrolepunten worden uitgesloten. De GitHub Actions-workflow moet nog worden uitgevoerd om de aangepaste output te toetsen.
+
+## Controle volledige experimentele feed (2026-11-01)
+
+GitHub Actions-run [41332081262](https://github.com/ColombiaTransit/gtfs-socobuses/actions/runs/41332081262) is geslaagd. Het artifact bevat **geen** bewaard validatorrapport, zodat de inhoudelijke MobilityData-meldingen uit die run niet zijn vastgesteld.
+
+Het artifact toont: 30 lijnen in de conservatieve feed, 29 lijnen in de experimentele feed, 148 template-trips, 148 frequenties en 4.437 stop-times. De uitsluitingslijst bevat 17 regels: 10 ontbrekende zondagfrequenties, 2 ontbrekende eindcontrolepunten (bronroute-ID 37 en 82), 1 zonder positieve tijdcontrolepunten (52), 1 niet-monotone tijdreeks (63) en 2 zonder voldoende geometrie (89, 90). Dit zijn **meldingen**, geen 17 verschillende uitgesloten routes; de zondagmeldingen betreffen alleen die dagsoort.
+
+`scripts/validate_experimental_gtfs.py` voert nu een structurele controle uit op verwijzingen, tijdvolgorde, frequentie-/templatekoppelingen, dagtypevensters, uitgesloten timingroutes en afwezige zondagtemplates. Het resultaat wordt `output/validation/gtfs-consistency.json`. De workflow bewaart daarnaast de uitvoer van de MobilityData-validator als `output/validation/validator.log`, naast eventuele rapportbestanden.
+
+Deze controles kunnen geen werkelijke halteposities, rijtijden of vertrektijden bevestigen. De feed blijft **EXPERIMENTAL ONLY — DO NOT PUBLISH**. Voer de workflow opnieuw uit om de nieuwe controles en het validatorrapport te beoordelen.

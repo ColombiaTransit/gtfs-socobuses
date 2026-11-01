@@ -1,0 +1,65 @@
+name: Validate OSM stops against Socobuses API
+on:
+  workflow_dispatch:
+    inputs:
+      osm_run_id:
+        description: "Completed OSM-to-shape matching run"
+        required: true
+        default: "41322848320"
+      source_run_id:
+        description: "Socobuses reference-point discovery run"
+        required: true
+        default: "41317058217"
+      coverage_run_id:
+        description: "Earlier reference coverage run"
+        required: true
+        default: "41320491793"
+      max_requests:
+        description: "Maximum unique OSM stops to check (1 second minimum between requests)"
+        required: true
+        default: "500"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: socobuses-osm-shape-matches
+          run-id: ${{ inputs.osm_run_id }}
+          github-token: ${{ github.token }}
+          path: osm/
+      - uses: actions/download-artifact@v4
+        with:
+          name: socobuses-api-probe
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: source/
+      - uses: actions/download-artifact@v4
+        with:
+          name: socobuses-reference-coverage
+          run-id: ${{ inputs.coverage_run_id }}
+          github-token: ${{ github.token }}
+          path: coverage/
+      - name: Check unique OSM stop coordinates against nearest-reference API
+        run: |
+          python scripts/validate_osm_stops_api.py \
+            --candidates osm/stop_shape_candidates.json \
+            --references source/reference_points.json \
+            --coverage coverage/reference-coverage.json \
+            --max-requests "${{ inputs.max_requests }}" \
+            --delay 1.2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: socobuses-osm-api-validation
+          path: output/osm-api-validation/
+          if-no-files-found: warn

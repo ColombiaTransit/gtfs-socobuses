@@ -40,6 +40,7 @@ def sample(seq, count):
 
 def main():
     p = argparse.ArgumentParser()
+    p.add_argument("--details-only", action="store_true", help="Fetch missing details for previously discovered routes, without discovery")
     p.add_argument("--all", action="store_true", help="Try all reference points and valid destinations, with safety budget")
     p.add_argument("--max-requests", type=int, default=500)
     p.add_argument("--origin-offset", type=int, default=0)
@@ -97,7 +98,7 @@ def main():
     destinations_cache = read(CACHE / "destinations.json", {})
     errors = []
     new_filters = 0
-    for origin in origins:
+    for origin in ([] if a.details_only else origins):
         key = str(origin)
         if key not in destinations_cache:
             if not budget():
@@ -147,10 +148,10 @@ def main():
         if stopped_reason:
             break
     for route_id in list(index):
-        if (not a.all and len(details) >= a.max_routes) or not budget():
-            break
         if route_id in details:
             continue
+        if (not a.all and not a.details_only and len(details) >= a.max_routes) or not budget():
+            break
         try:
             result = post("/site/routes/getRouteById", {"routeId": int(route_id)})
             if isinstance(result, dict) and result.get("status") and result.get("getRouteById"):
@@ -176,7 +177,7 @@ def main():
         "total_filter_queries_cached": len(filters),
         "unique_routes": len(index), "route_details": len(details),
         "requests_this_run": requests_made, "stopped_reason": stopped_reason,
-        "all_mode": a.all, "errors": errors,
+        "all_mode": a.all, "details_only": a.details_only, "errors": errors,
     }
     write(OUT / "summary.json", summary)
     LOG.info("Probe summary: %s", json.dumps(summary, ensure_ascii=False))

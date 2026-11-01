@@ -1,0 +1,26 @@
+name: Harvest Manizales ArcGIS (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HTTP client
+        run: python -m pip install requests
+      - name: Download every available route and mobility layer
+        run: python scripts/harvest_manizales_arcgis.py --output output/arcgis
+      - name: Upload original GeoJSON, schemas and manifest (even on partial failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manizales-arcgis-archive
+          path: output/arcgis/
+          if-no-files-found: warn
+          retention-days: 30

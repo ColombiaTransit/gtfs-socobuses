@@ -1,0 +1,45 @@
+name: Probe Socobuses API (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_origins:
+        description: "Sampled origins (1-10)"
+        default: "3"
+        required: true
+      max_destinations:
+        description: "Sampled destinations (1-20)"
+        default: "8"
+        required: true
+      max_routes:
+        description: "Maximum route details (1-50)"
+        default: "15"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Probe Socobuses
+        run: |
+          python scripts/probe_socobuses.py \
+            --max-origins "${{ inputs.max_origins }}" \
+            --max-destinations "${{ inputs.max_destinations }}" \
+            --max-routes "${{ inputs.max_routes }}"
+      - name: Upload raw API responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: socobuses-api-probe
+          path: output/
+          if-no-files-found: warn
+          retention-days: 14

@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from build_calendar import generate as generate_calendar
+from build_gtfs import route_identity
 
 
 def save(path, fields, rows):
@@ -36,6 +37,7 @@ def as_interval(value):
 def build(source, output, start, end, first, last):
     details = json.loads(source.read_text(encoding="utf-8"))
     stops, trips, times, frequencies, routes, shapes, audit = [], [], [], [], [], [], []
+    seen_lines = set()
     services = [("WEEKDAY", "mondayToFridayTimeRoute"),
                 ("SATURDAY", "saturdayTimeRoute"),
                 ("SUNDAY_HOLIDAY", "sundayAndHolidaysTimeRoute")]
@@ -62,8 +64,12 @@ def build(source, output, start, end, first, last):
             audit.append({"route_id": rid, "issue": "skipped: insufficient reference points"})
             continue
         route_name = f'{route.get("startControl") or ""} - {route.get("endControl") or ""}'.strip(" -")
-        routes.append({"route_id": rid, "agency_id": "socobuses",
-                       "route_short_name": number, "route_long_name": route_name, "route_type": 3})
+        line_id, direction_id = route_identity(number)
+        if line_id not in seen_lines:
+            routes.append({"route_id": line_id, "agency_id": "socobuses",
+                           "route_short_name": line_id, "route_long_name": "",
+                           "route_type": 3})
+            seen_lines.add(line_id)
         for i, (lat, lon) in enumerate(coords):
             shapes.append({"shape_id": f"shape_{rid}", "shape_pt_lat": lat,
                            "shape_pt_lon": lon, "shape_pt_sequence": i + 1})
@@ -97,8 +103,10 @@ def build(source, output, start, end, first, last):
                 audit.append({"route_id": rid, "issue": f"no valid interval: {field}"})
                 continue
             trip_id = f"{rid}_{service_id}_template"
-            trips.append({"route_id": rid, "service_id": service_id,
-                          "trip_id": trip_id, "shape_id": f"shape_{rid}"})
+            trips.append({"route_id": line_id, "service_id": service_id,
+                          "trip_id": trip_id, "shape_id": f"shape_{rid}",
+                          "direction_id": direction_id if direction_id is not None else "",
+                          "trip_headsign": route.get("endControl") or ""})
             for i, offset in enumerate(offsets):
                 t = hhmm(first + offset)
                 times.append({"trip_id": trip_id, "arrival_time": t, "departure_time": t,
@@ -112,7 +120,7 @@ def build(source, output, start, end, first, last):
     save(output / "routes.txt", ["route_id", "agency_id", "route_short_name", "route_long_name", "route_type"], routes)
     save(output / "shapes.txt", ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence"], shapes)
     save(output / "stops.txt", ["stop_id", "stop_name", "stop_lat", "stop_lon"], stops)
-    save(output / "trips.txt", ["route_id", "service_id", "trip_id", "shape_id"], trips)
+    save(output / "trips.txt", ["route_id", "service_id", "trip_id", "shape_id", "direction_id", "trip_headsign"], trips)
     save(output / "stop_times.txt", ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"], times)
     save(output / "frequencies.txt", ["trip_id", "start_time", "end_time", "headway_secs", "exact_times"], frequencies)
     generate_calendar(start, end, output)
@@ -121,7 +129,7 @@ def build(source, output, start, end, first, last):
         "EXPERIMENTAL ONLY - DO NOT PUBLISH. All stop coordinates are estimated from route geometry "
         "by relative sequence position, not actual stop locations. Reference points may not be stops. "
         "Time differences are interpreted as cumulative minutes and interpolated between checkpoints. "
-        f"Operating window {hhmm(first)} to {hhmm(last)} is an assumption, NOT provided by Socobuses. "
+        f"Operating window {hhmm(first)} to {hhmm(last)} is an experimental departure assumption, not a route-specific published timetable. Socobuses publishes general hours at https://socobuses.com/tourist?language=EN. "
         "Intervals are interpreted as minutes but are not verified. Calendar holiday operation is assumed. "
         "Routes with missing geometry or invalid timing checkpoints are excluded.\n",
         encoding="utf-8")

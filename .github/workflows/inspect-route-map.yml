@@ -1,0 +1,22 @@
+name: Inspect Socobuses Google Maps data
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Inspect route-page scripts
+        run: python scripts/inspect_route_map.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: socobuses-map-javascript-research
+          path: output/map-research/
+          if-no-files-found: error

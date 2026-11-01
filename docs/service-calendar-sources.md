@@ -44,3 +44,13 @@ API: `site/routes/getRouteById` (per-route frequentievelden).
 
 Bronstatus: website geraadpleegd op 2026-11-01; deze documentatie bewaart de
 bron-URL en de waargenomen tijdvensters, niet een onveranderlijke kopie van de pagina.
+
+## Interpretatie van frequentie 0 — bevestigd op de website (2026-11-01)
+
+De Socobuses-website toont bij de betrokken routes voor **zondag en feestdagen** eveneens frequentie **0**. Voor deze feed hanteren we daarom de expliciete operationele regel: **frequentie 0 betekent dat de route op zondag en feestdagen niet rijdt**. Dit vervangt de eerdere onderzoeksstatus `zero_unconfirmed` voor het zondag-/feestdagveld.
+
+Het gaat om 12 richtingsroutes, gegroepeerd in zes routeparen: `602i/r`, `605i/r`, `609i/r`, `610i/r`, `613vi/vr` en `625i/r`. De overige 47 van de 59 routes hebben een positieve zondag-/feestdagfrequentie.
+
+**Bronnen:** Socobuses routepagina https://socobuses.co/routes en de per-route weergave van de frequentie; Socobuses-API `site/routes/getRouteById`, veld `sundayAndHolidaysTimeRoute`. De overeenkomst tussen website en API is door de gebruiker bevestigd op 2026-11-01.
+
+**GTFS-regel:** genereer voor deze 12 routes geen `trips.txt`-ritten met `service_id=SUNDAY_HOLIDAY`. De algemene kalender in `calendar.txt` blijft bestaan voor de 47 andere routes. De officiële algemene diensturen 06:00–21:00 zijn niet van toepassing als er voor de betreffende route geen dienst is.

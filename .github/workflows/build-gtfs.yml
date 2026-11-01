@@ -45,6 +45,11 @@ jobs:
             --output output/gtfs \
             --start-date "${{ inputs.start_date }}" \
             --end-date "${{ inputs.end_date }}"
+      - name: Audit route timing readiness
+        run: |
+          python scripts/audit_timing_readiness.py \
+            --source source/route_details.json \
+            --output output/research/timing_readiness.csv
       - name: Build experimental complete GTFS (estimated data)
         run: |
           python scripts/build_experimental_gtfs.py \

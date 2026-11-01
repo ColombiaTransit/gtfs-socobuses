@@ -52,6 +52,13 @@ jobs:
             --output output/experimental_gtfs \
             --start-date "${{ inputs.start_date }}" \
             --end-date "${{ inputs.end_date }}"
+      - name: Validate experimental GTFS with MobilityData validator
+        continue-on-error: true
+        run: |
+          mkdir -p output/validation
+          (cd output/experimental_gtfs && zip -q -r ../validation/experimental-gtfs.zip .)
+          curl -fLsS --retry 3 -o /tmp/validator.jar https://github.com/MobilityData/gtfs-validator/releases/latest/download/gtfs-validator.jar
+          java -jar /tmp/validator.jar -i output/validation/experimental-gtfs.zip -o output/validation/report
       - name: Upload GTFS draft and research files
         uses: actions/upload-artifact@v4
         with:

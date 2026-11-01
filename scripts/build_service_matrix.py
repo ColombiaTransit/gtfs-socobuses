@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Export a route-by-daytype service evidence matrix from cached Socobuses API data.
+"""Export Socobuses route/daytype matrix with official general service hours.
 
-Positive frequency is evidence of an advertised headway, not proof of operating hours.
-Zero frequency is unconfirmed (not automatically 'no service').
+Official published hours: https://socobuses.com/tourist?language=EN
+These are system-wide service windows, NOT verified route-specific departures.
 """
 import argparse
 import csv
 import json
 from pathlib import Path
 
+HOURS_SOURCE = "https://socobuses.com/tourist?language=EN"
 DAYTYPES = (
     ("WEEKDAY", "mondayToFridayTimeRoute", "04:30", "22:30"),
     ("SATURDAY", "saturdayTimeRoute", "06:00", "21:00"),
@@ -42,17 +43,20 @@ def main():
                 "source_field": field,
                 "frequency_minutes_raw": raw,
                 "evidence_status": status,
-                "general_start_candidate": start,
-                "general_end_candidate": end,
-                "hours_source": "external general Manizales tourism information; NOT verified for this route",
+                "general_start": start,
+                "general_end": end,
+                "hours_source_url": HOURS_SOURCE,
+                "hours_source_status": "official_general_service_hours",
+                "route_specific_first_last_departures_verified": "no",
                 "publishable_schedule": "no",
             })
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=[
             "route_id", "route_short_name", "service_id", "source_field",
-            "frequency_minutes_raw", "evidence_status", "general_start_candidate",
-            "general_end_candidate", "hours_source", "publishable_schedule"])
+            "frequency_minutes_raw", "evidence_status", "general_start",
+            "general_end", "hours_source_url", "hours_source_status",
+            "route_specific_first_last_departures_verified", "publishable_schedule"])
         writer.writeheader()
         writer.writerows(rows)
     print(f"Wrote {len(rows)} route/daytype records to {args.output}")

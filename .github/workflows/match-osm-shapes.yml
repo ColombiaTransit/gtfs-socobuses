@@ -1,0 +1,43 @@
+name: Match Socobuses stops to OSM and shapes
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "API discovery run with route_details and reference_points"
+        required: true
+        default: "41317058217"
+      max_distance_m:
+        description: "Maximum OSM-to-shape distance in metres"
+        required: true
+        default: "120"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: socobuses-api-probe
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: source/
+      - name: Download OSM and project stops onto route shapes
+        run: |
+          python scripts/match_osm_shapes.py \
+            --details source/route_details.json \
+            --references source/reference_points.json \
+            --max-distance-m "${{ inputs.max_distance_m }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: socobuses-osm-shape-matches
+          path: output/osm-shape-matches/
+          if-no-files-found: warn

@@ -15,7 +15,7 @@ SOURCES = {
 ITEM_ID = "54eeb145d33a4033995bc61a0c35c436"
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "ColombiaTransit-Socobuses-Research/1.0"})
-ALLOWED = ("sig.manizales.gov.co", "services.arcgis.com", "services1.arcgis.com",
+ALLOWED = ("www.arcgis.com", "sig.manizales.gov.co", "services.arcgis.com", "services1.arcgis.com",
            "services2.arcgis.com", "services3.arcgis.com", "services4.arcgis.com",
            "services5.arcgis.com", "services6.arcgis.com", "services7.arcgis.com",
            "services8.arcgis.com", "services9.arcgis.com", "services-eu1.arcgis.com")

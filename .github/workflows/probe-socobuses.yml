@@ -66,6 +66,10 @@ jobs:
             --max-origins "${{ inputs.max_origins }}" \
             --max-destinations "${{ inputs.max_destinations }}" \
             --max-routes "${{ inputs.max_routes }}"
+      - name: Build GTFS draft
+        if: success()
+        run: |
+          python scripts/build_gtfs.py --start-date 2026-11-01 --end-date 2027-12-31
       - name: Save API cache
         if: success()
         uses: actions/cache/save@v4

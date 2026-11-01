@@ -12,3 +12,13 @@ For every queryable layer the script stores source service metadata, layer schem
 Review the manifest for layers with `paradero`, `parada`, `bus`, `ruta` or `transporte` in their names, and compare route features against Socobuses route 627i/627r. This archive does **not** imply that municipal route records are current or that point features are validated boarding stops. No changes are made to the GTFS feed.
 
 To run locally: `pip install requests && python scripts/harvest_manizales_arcgis.py --output output/arcgis`.
+
+## Eerste uitvoering — run 41333361116
+
+De workflow eindigde met **failure**, omdat de gemeentelijke `sig.manizales.gov.co`-server na een HTTPS-verbindingstime-out niet kon worden geïnventariseerd. Dankzij de `always()`-upload is het gedeeltelijke artifact wel bewaard: `manizales-arcgis-archive` (ID `13094346283`).
+
+**Wel volledig gedownload:** `Rutas_Servicio_Publico` via `services6.arcgis.com/PtpS85InlUyG2Gqs/arcgis/rest/services/Rutas_Servicio_Publico/FeatureServer/0`: 106 GeoJSON-features, 61 unieke `RUTA`-codes, 47 features met `EMPRESA=SOCOBUSES`. De laag bevat polyline-geometrieën en de velden `RUTA`, `EMPRESA`, `NOMBRE_RUT`, `HEADWAY` enzovoort. Er is **geen route 627** gevonden; route 508 (`VILLAPILAR - MALTERIA`) is geen aangetoonde match met 627i/r.
+
+**Niet gedownload:** `MOVILIDAD/appTuristica/MapServer`, wegens timeout. Daarom zijn er nog geen bushaltes uit die bron bevestigd. De workflow mag niet als volledige serverharvest worden aangemerkt.
+
+Vervolg: onderzoek een bereikbaar alternatief voor de gemeentelijke ArcGIS-service en inventariseer vervolgens eventuele halte-/paraderolagen. Koppel historische routes niet automatisch aan actuele Socobuses-codes.

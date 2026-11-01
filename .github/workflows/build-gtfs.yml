@@ -1,0 +1,54 @@
+name: Build Socobuses GTFS (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful probe run with route_details.json artifact"
+        required: true
+        default: "41317058217"
+      start_date:
+        description: "GTFS calendar start (YYYY-MM-DD)"
+        required: true
+        default: "2026-11-01"
+      end_date:
+        description: "GTFS calendar end (YYYY-MM-DD)"
+        required: true
+        default: "2027-12-31"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Download existing API research artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: socobuses-api-probe
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: source/
+      - name: Verify source and build GTFS draft
+        run: |
+          test -s source/route_details.json
+          python scripts/build_gtfs.py \
+            --source source/route_details.json \
+            --output output/gtfs \
+            --start-date "${{ inputs.start_date }}" \
+            --end-date "${{ inputs.end_date }}"
+      - name: Upload GTFS draft and research files
+        uses: actions/upload-artifact@v4
+        with:
+          name: socobuses-gtfs-draft
+          path: output/
+          if-no-files-found: error
+          retention-days: 30

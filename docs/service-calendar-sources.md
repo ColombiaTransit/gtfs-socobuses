@@ -24,7 +24,7 @@ Dit zijn **officieel gepubliceerde algemene diensturen**. De bron specificeert n
 
 De dagtypefrequenties worden per route gelezen uit de Socobuses-API:
 `mondayToFridayTimeRoute`, `saturdayTimeRoute` en `sundayAndHolidaysTimeRoute`.
-De routecontroller toont deze waarden als benaderde frequentie; nulwaarden zijn **geen bewezen dienstuitval**.
+De routecontroller toont deze waarden als benaderde frequentie. Voor zondag/feestdagen is frequentie 0 bevestigd als geen dienst (zie hieronder).
 
 `scripts/build_calendar.py` genereert de drie algemene GTFS-service-ID's en
 `calendar_dates.txt` met nationale Colombiaanse feestdagen via `holidays`.
@@ -54,3 +54,11 @@ Het gaat om 12 richtingsroutes, gegroepeerd in zes routeparen: `602i/r`, `605i/r
 **Bronnen:** Socobuses routepagina https://socobuses.co/routes en de per-route weergave van de frequentie; Socobuses-API `site/routes/getRouteById`, veld `sundayAndHolidaysTimeRoute`. De overeenkomst tussen website en API is door de gebruiker bevestigd op 2026-11-01.
 
 **GTFS-regel:** genereer voor deze 12 routes geen `trips.txt`-ritten met `service_id=SUNDAY_HOLIDAY`. De algemene kalender in `calendar.txt` blijft bestaan voor de 47 andere routes. De officiële algemene diensturen 06:00–21:00 zijn niet van toepassing als er voor de betreffende route geen dienst is.
+
+## Richtingsvarianten ida/regreso en GTFS-mapping
+
+De Socobuses-routecode met suffix `i` staat voor **ida** (heenrichting, GTFS `direction_id=0`) en suffix `r` voor **regreso** (terugrichting, `direction_id=1`). Verwijder alleen de laatste letter bij het bepalen van de GTFS-`route_id`: `602i` en `602r` worden lijn `602`; `613vi` en `613vr` worden lijnvariant `613v`, **niet** `613`. Niet-herkende codes blijven afzonderlijke lijnen zonder vastgestelde richting.
+
+De bronroute-ID en volledige broncode blijven behouden in `research/route_directions.csv`, inclusief het kandidaat-`trip_headsign` (eindpunt) en de eigen `shape_id`. `routes.txt` bevat iedere gegroepeerde lijn eenmaal; de richtingsspecifieke geometrieën blijven afzonderlijk in `shapes.txt`.
+
+Bij het bouwen van `trips.txt` moeten alle richtingsritten dezelfde gegroepeerde `route_id` krijgen, met hun eigen `direction_id`, `shape_id`, `trip_headsign` en toepasselijke `service_id`. De bronfrequentie 0 op zondag/feestdagen betekent **geen ritten** voor die richting op `SUNDAY_HOLIDAY`. De algemene diensturen en frequenties vormen geen bewijs voor exacte vertrektijden; de conservatieve builder genereert daarom nog geen ritten.
